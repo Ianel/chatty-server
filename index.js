@@ -37,7 +37,10 @@ app.get("/sessions", async (req, res) => {
         res.send({ success: true, sessions: result.rows });
     } catch (error) {
         console.error("Erreur lors de la récupération des sessions:", error);
-        res.status(500).send({ success: false, message: "Erreur serveur" });
+        res.status(500).send({
+            success: false,
+            message: `Erreur serveur: ${error}`,
+        });
     }
 });
 
@@ -53,7 +56,10 @@ app.get("/sessions/:sessionId/messages", async (req, res) => {
         res.send({ success: true, messages: result.rows });
     } catch (error) {
         console.error("Erreur lors de la récupération des messages:", error);
-        res.status(500).send({ success: false, message: "Erreur serveur" });
+        res.status(500).send({
+            success: false,
+            message: `Erreur serveur: ${error}`,
+        });
     }
 });
 
@@ -106,7 +112,10 @@ app.post("/content", async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors du traitement du message:", error);
-        res.status(500).send({ success: false, message: "Erreur serveur" });
+        res.status(500).send({
+            success: false,
+            message: `Erreur serveur: ${error}`,
+        });
     }
 });
 
