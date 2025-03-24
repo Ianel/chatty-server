@@ -20,6 +20,19 @@ const pool = new Pool({
 
 app.use(cors());
 app.use(bodyParser.json());
+app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*"); // Ou spécifie ton domaine
+    res.setHeader(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS"
+    );
+    res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization"
+    );
+    res.setHeader("Access-Control-Allow-Credentials", "true"); // Si besoin
+    next();
+});
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
