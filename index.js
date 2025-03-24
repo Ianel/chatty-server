@@ -3,7 +3,7 @@ import bodyParser from "body-parser";
 import cors from "cors";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import pkg from "pg";
-import { v4 as uuidv4 } from "uuid"; // Pour générer des session_id uniques
+import { v4 as uuidv4 } from "uuid";
 
 const { Pool } = pkg;
 
@@ -18,7 +18,7 @@ const pool = new Pool({
     port: process.env.DB_PORT,
 });
 
-app.use(cors());
+app.use(cors({ origin: "*" }));
 app.use(bodyParser.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -28,120 +28,88 @@ app.get("/", (req, res) => {
     res.send("Hello World");
 });
 
-// Nouvelle route pour récupérer l'historique des sessions
+// Récupérer l'historique des sessions
 app.get("/sessions", async (req, res) => {
     try {
-        const query = `
-            SELECT session_id, created_at
-            FROM sessions
-            ORDER BY created_at DESC;
-        `;
-        const result = await pool.query(query);
-        res.send({
-            success: true,
-            sessions: result.rows,
-        });
+        const result = await pool.query(
+            "SELECT session_id, created_at FROM sessions ORDER BY created_at DESC;"
+        );
+        res.send({ success: true, sessions: result.rows });
     } catch (error) {
-        console.error("Error fetching sessions:", error);
-        res.status(500).send({
-            success: false,
-            message: "An error occurred while fetching sessions.",
-        });
+        console.error("Erreur lors de la récupération des sessions:", error);
+        res.status(500).send({ success: false, message: "Erreur serveur" });
     }
 });
 
-// Nouvelle route pour récupérer les messages d'une session
+// Récupérer les messages d'une session
 app.get("/sessions/:sessionId/messages", async (req, res) => {
     const { sessionId } = req.params;
 
     try {
-        const query = `
-            SELECT sender, message, created_at
-            FROM conversations
-            WHERE session_id = $1
-            ORDER BY created_at ASC;
-        `;
-        const result = await pool.query(query, [sessionId]);
-        res.send({
-            success: true,
-            messages: result.rows,
-        });
+        const result = await pool.query(
+            "SELECT sender, message, created_at FROM conversations WHERE session_id = $1 ORDER BY created_at ASC;",
+            [sessionId]
+        );
+        res.send({ success: true, messages: result.rows });
     } catch (error) {
-        console.error("Error fetching messages:", error);
-        res.status(500).send({
-            success: false,
-            message: "An error occurred while fetching messages.",
-        });
+        console.error("Erreur lors de la récupération des messages:", error);
+        res.status(500).send({ success: false, message: "Erreur serveur" });
     }
 });
 
-// Ajuster la route POST /content pour enregistrer les sessions
+// Gérer les messages et stocker les sessions
 app.post("/content", async (req, res) => {
     const { prompt, sessionId } = req.body;
 
-    if (!prompt) {
-        return res.status(400).send({
-            success: false,
-            message: "Prompt is required",
-        });
+    if (!prompt || typeof prompt !== "string") {
+        return res
+            .status(400)
+            .send({ success: false, message: "Prompt invalide" });
     }
 
     try {
-        // Si aucun sessionId n'est fourni, en générer un nouveau
         const session_id = sessionId || uuidv4();
 
-        // Créer une nouvelle session si elle n'existe pas
         if (!sessionId) {
-            const insertSessionQuery = `
-                INSERT INTO sessions (session_id)
-                VALUES ($1)
-                ON CONFLICT DO NOTHING;
-            `;
-            await pool.query(insertSessionQuery, [session_id]);
+            await pool.query(
+                "INSERT INTO sessions (session_id, created_at) VALUES ($1, NOW()) ON CONFLICT DO NOTHING;",
+                [session_id]
+            );
         }
 
-        // Récupérer l'historique des messages pour cette session
-        const historyQuery = `
-            SELECT sender, message
-            FROM conversations
-            WHERE session_id = $1
-            ORDER BY created_at ASC;
-        `;
-        const historyResult = await pool.query(historyQuery, [session_id]);
+        const historyResult = await pool.query(
+            "SELECT sender, message FROM conversations WHERE session_id = $1 ORDER BY created_at ASC;",
+            [session_id]
+        );
+
         const history = historyResult.rows
             .map((row) => `${row.sender}: ${row.message}`)
             .join("\n");
 
-        // Ajouter le nouveau prompt à l'historique
         const fullPrompt = `${history}\nuser: ${prompt}`;
 
-        // Générer la réponse avec l'IA
+        console.log("Envoi à l'IA:", fullPrompt);
+
         const result = await model.generateContent(fullPrompt);
-        const generatedText = result.response.text();
+        const generatedText = await result.response.text();
 
-        // Enregistrer le prompt et la réponse dans la base de données
-        const insertQuery = `
-            INSERT INTO conversations (session_id, sender, message, created_at)
-            VALUES ($1, $2, $3, NOW()), ($1, $4, $5, NOW());
-        `;
-        const values = [session_id, "user", prompt, "bot", generatedText];
-        await pool.query(insertQuery, values);
+        await pool.query(
+            `INSERT INTO conversations (session_id, sender, message, created_at) 
+             VALUES ($1, $2, $3, NOW()), ($1, $4, $5, NOW());`,
+            [session_id, "user", prompt, "bot", generatedText]
+        );
 
-        // Retourner la réponse et le sessionId au client
         res.send({
             success: true,
             sessionId: session_id,
             response: generatedText,
         });
     } catch (error) {
-        console.error("Error:", error);
-        res.status(500).send({
-            success: false,
-            message: "An error occurred",
-        });
+        console.error("Erreur lors du traitement du message:", error);
+        res.status(500).send({ success: false, message: "Erreur serveur" });
     }
 });
 
 app.listen(PORT, () => {
-    console.log("Server is running on port 3000");
+    console.log(`Serveur démarré sur le port ${PORT}`);
 });
