@@ -18,21 +18,14 @@ const pool = new Pool({
     port: process.env.DB_PORT,
 });
 
-app.use(cors());
+const corsOptions = {
+    origin: "*",
+    credentials: true, //access-control-allow-credentials:true
+    optionSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
-app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*"); // Ou spécifie ton domaine
-    res.setHeader(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS"
-    );
-    res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization"
-    );
-    res.setHeader("Access-Control-Allow-Credentials", "true"); // Si besoin
-    next();
-});
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
