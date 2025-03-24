@@ -18,7 +18,7 @@ const pool = new Pool({
     port: process.env.DB_PORT,
 });
 
-app.use(cors({ origin: "*" }));
+app.use(cors());
 app.use(bodyParser.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
